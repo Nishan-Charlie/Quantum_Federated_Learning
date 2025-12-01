@@ -1,0 +1,8 @@
+torch
+torchvision
+flwr
+pennylane
+einops
+numpy
+calflops
+torchinfo
