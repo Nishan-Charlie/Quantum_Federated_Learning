@@ -1,3 +1,5 @@
 .venv/
 CT_Scan/
 .idea/
+chest_xray/
+plots_vit/

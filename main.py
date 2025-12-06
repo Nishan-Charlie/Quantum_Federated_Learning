@@ -10,9 +10,9 @@ from data_setup import load_partitioned_data
 # =========================================================================
 # CONFIGURATION
 # =========================================================================
-NUM_CLIENTS = 4        # Number of hospitals
-BATCH_SIZE = 4         # Keep small for Quantum Simulation speed
-NUM_ROUNDS = 3         # Number of Global FL Rounds
+NUM_CLIENTS = 5        # Number of hospitals
+BATCH_SIZE = 32         # Keep small for Quantum Simulation speed
+NUM_ROUNDS = 50         # Number of Global FL Rounds
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print(f"Starting Federated Quantum Simulation on: {DEVICE}")
@@ -22,6 +22,7 @@ print(f"Starting Federated Quantum Simulation on: {DEVICE}")
 # =========================================================================
 # This generates a list of dataloaders, one pair (train/val) for each client ID
 trainloaders, valloaders = load_partitioned_data(NUM_CLIENTS, BATCH_SIZE)
+
 
 # =========================================================================
 # 2. DEFINE CLIENT GENERATOR
@@ -37,9 +38,10 @@ def client_fn(cid: str) -> fl.client.Client:
     # Get the specific data partition for this client
     trainloader = trainloaders[idx]
     testloader = valloaders[idx]
-    
+
     # Create the Flower Client (containing the Quantum Model)
     return Client(trainloader, testloader, DEVICE)
+
 
 # =========================================================================
 # 3. DEFINE SERVER STRATEGY (AGGREGATION)

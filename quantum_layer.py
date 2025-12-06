@@ -113,7 +113,7 @@ class KnittedVQC(nn.Module):
             # PennyLane's 'broadcast' feature or 'lightning.qubit' is preferred.
             # Here we keep it explicit for clarity and Torch gradient safety.
             circuit_out = torch.stack([
-                reuploading_circuit(x_sample, circuit_weights) 
+                torch.stack(reuploading_circuit(x_sample, circuit_weights))
                 for x_sample in input_chunk
             ])
             
@@ -126,7 +126,7 @@ class KnittedVQC(nn.Module):
         # 4. Final Scaling (Hybrid Trick)
         # Raw quantum output is [-1, 1]. 
         # We multiply by a learnable scalar to match the distribution expected by the next Dense layer.
-        return knitted_raw * self.output_scale
+        return (knitted_raw * self.output_scale).float()
 
 if __name__ == "__main__":
     # === Simulation Test ===
