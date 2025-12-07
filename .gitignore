@@ -3,3 +3,6 @@ CT_Scan/
 .idea/
 chest_xray/
 plots_vit/
+plots_baseline/
+plots/
+outputs/
