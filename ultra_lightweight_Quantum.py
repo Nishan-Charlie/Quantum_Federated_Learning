@@ -11,13 +11,14 @@ import matplotlib.pyplot as plt
 import csv
 import os
 from tqdm import tqdm
+import argparse
 
 # Import the Ultra Lightweight model
 from Ultra_Lightweight import UltraLightEfficentNet_L1
 
 # Hybrid Ultra Lightweight Model
 class HybridUltraLight(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes=2, n_quantum_layers=7):
         super(HybridUltraLight, self).__init__()
         
         # Initialize the Ultra Lightweight model
@@ -46,8 +47,8 @@ class HybridUltraLight(nn.Module):
             nn.Flatten(),
             nn.Linear(in_features, 64),
             nn.BatchNorm1d(64),
-            KnittedVQC(n_sub_circuits=8, n_qubits=8, n_layers=7),
-            nn.Linear(64, 2)
+            KnittedVQC(n_sub_circuits=8, n_qubits=8, n_layers=n_quantum_layers),
+            nn.Linear(64, num_classes)
         )
 
     def forward(self, x):
@@ -126,7 +127,7 @@ def evaluate(loader, model, device, criterion):
     
     return epoch_loss, accuracy, precision, recall, f1
 
-def plot_metrics(history, save_dir='plots_ultra'):
+def plot_metrics(history, save_dir):
     os.makedirs(save_dir, exist_ok=True)
     epochs = range(1, len(history['train_loss']) + 1)
     
@@ -143,8 +144,19 @@ def plot_metrics(history, save_dir='plots_ultra'):
         plt.close()
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Train Hybrid Ultra Lightweight Quantum Model')
+    parser.add_argument('--classes', type=int, default=2, help='Number of output classes (default: 2)')
+    parser.add_argument('--quantum_layers', type=int, default=7, help='Number of quantum layers (default: 7)')
+    parser.add_argument('--dataset_path', type=str, default='chest_xray', help='Path to dataset (default: chest_xray)')
+    parser.add_argument('--output_dir', type=str, default='outputs_ultra', help='Directory to save outputs (default: outputs_ultra)')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate (default: 0.0001)')
     
-    data_dir = 'chest_xray'
+    args = parser.parse_args()
+    
+    data_dir = args.dataset_path
+    output_dir = args.output_dir
+    os.makedirs(output_dir, exist_ok=True)
+    plots_dir = os.path.join(output_dir, 'plots_ultra')
 
     data_transforms = {
         
@@ -186,11 +198,16 @@ if __name__ == '__main__':
 
     # Device configuration
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+    print(f"Dataset: {data_dir}")
+    print(f"Output Config: {output_dir}")
+    print(f"Model Config: {args.classes} classes, {args.quantum_layers} quantum layers")
+    print(f"Training Config: LR={args.lr}")
 
     # Initialize model, loss, and optimizer
-    model = HybridUltraLight().to(device)
+    model = HybridUltraLight(num_classes=args.classes, n_quantum_layers=args.quantum_layers).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=0.0001, weight_decay=0.005)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.005)
     
     # Print trainable parameters to verify
     print("Trainable parameters:")
@@ -208,7 +225,7 @@ if __name__ == '__main__':
     }
     
     # CSV file setup
-    csv_file = 'training_metrics_ultra.csv'
+    csv_file = os.path.join(output_dir, 'training_metrics_ultra.csv')
     with open(csv_file, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Epoch', 'Train Loss', 'Train Acc', 'Train Prec', 'Train Recall', 'Train F1',
@@ -255,7 +272,7 @@ if __name__ == '__main__':
 
     # Plotting
     print("Plotting metrics...")
-    plot_metrics(history)
+    plot_metrics(history, save_dir=plots_dir)
 
     # Testing after training
     print("Testing model...")
@@ -264,4 +281,4 @@ if __name__ == '__main__':
     print(f"Test F1 Score: {test_f1:.4f}")
 
     # Save the model
-    torch.save(model.state_dict(), 'hybrid_ultralight_quantum.pth')
+    torch.save(model.state_dict(), os.path.join(output_dir, 'hybrid_ultralight_quantum.pth'))
