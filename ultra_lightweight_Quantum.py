@@ -46,7 +46,7 @@ class HybridUltraLight(nn.Module):
             nn.Flatten(),
             nn.Linear(in_features, 64),
             nn.BatchNorm1d(64),
-            KnittedVQC(n_sub_circuits=8, n_qubits=8, n_layers=3),
+            KnittedVQC(n_sub_circuits=8, n_qubits=8, n_layers=7),
             nn.Linear(64, 2)
         )
 
@@ -190,7 +190,7 @@ if __name__ == '__main__':
     # Initialize model, loss, and optimizer
     model = HybridUltraLight().to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.004)
+    optimizer = optim.AdamW(model.parameters(), lr=0.0001, weight_decay=0.005)
     
     # Print trainable parameters to verify
     print("Trainable parameters:")
@@ -199,7 +199,7 @@ if __name__ == '__main__':
             print(f"  {name}")
     
     # Early Stopping
-    early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
+    early_stopping = EarlyStopping(patience=20, min_delta=0.0001)
 
     # Metrics history
     history = {
@@ -215,7 +215,7 @@ if __name__ == '__main__':
                          'Valid Loss', 'Valid Acc', 'Valid Prec', 'Valid Recall', 'Valid F1'])
 
     # Training loop
-    num_epochs = 50
+    num_epochs = 100
     for epoch in range(num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs}")
         
