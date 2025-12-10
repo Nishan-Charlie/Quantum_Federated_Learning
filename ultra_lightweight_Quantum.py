@@ -12,7 +12,7 @@ import csv
 import os
 from tqdm import tqdm
 import argparse
-
+import pickle  # Added for saving/loading history
 # Import the Ultra Lightweight model
 from Ultra_Lightweight import UltraLightEfficentNet_L1
 
@@ -26,7 +26,7 @@ class HybridUltraLight(nn.Module):
         self.backbone = UltraLightEfficentNet_L1(
             num_classes=1000, # Dummy class count, we will replace the classifier
             image_size=224,   # Matching our transforms
-            dims=[48, 64], 
+            dims=[48, 64],
             channels=[8, 16, 32, 48, 288]
         )
         
@@ -143,6 +143,22 @@ def plot_metrics(history, save_dir):
         plt.savefig(os.path.join(save_dir, f'{metric}.png'))
         plt.close()
 
+def save_checkpoint(state, is_best, output_dir):
+    checkpoint_path = os.path.join(output_dir, 'last_checkpoint.pth')
+    torch.save(state, checkpoint_path)
+    if is_best:
+        best_path = os.path.join(output_dir, 'best_checkpoint.pth')
+        torch.save(state, best_path)
+
+def load_checkpoint(checkpoint_path, model, optimizer):
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    start_epoch = checkpoint['epoch']
+    history = checkpoint['history']
+    best_loss = checkpoint.get('best_loss', None)
+    return start_epoch, history, best_loss
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Hybrid Ultra Lightweight Quantum Model')
     parser.add_argument('--classes', type=int, default=7, help='Number of output classes (default: 2)')
@@ -150,6 +166,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_path', type=str, default='ISIC 2018', help='Path to dataset (default: chest_xray)')
     parser.add_argument('--output_dir', type=str, default='outputs_ultra', help='Directory to save outputs (default: outputs_ultra)')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate (default: 0.0001)')
+    parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint to resume from (default: None)')
+    parser.add_argument('--num_epochs', type=int, default=100, help='Number of epochs (default: 100)')
     
     args = parser.parse_args()
     
@@ -157,7 +175,6 @@ if __name__ == '__main__':
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
     plots_dir = os.path.join(output_dir, 'plots_ultra')
-
     data_transforms = {
         
         'train': transforms.Compose([
@@ -189,13 +206,11 @@ if __name__ == '__main__':
         x: torchvision.datasets.ImageFolder(root=f"{data_dir}/{x}", transform=data_transforms[x])
         for x in ['train', 'valid', 'test']
     }
-
     # Set num_workers=0 to avoid multiprocessing issues with quantum simulator
     dataloaders = {
         x: DataLoader(image_datasets[x], batch_size=32, shuffle=True if x == 'train' else False, num_workers=0)
         for x in ['train', 'valid', 'test']
     }
-
     # Device configuration
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -203,7 +218,6 @@ if __name__ == '__main__':
     print(f"Output Config: {output_dir}")
     print(f"Model Config: {args.classes} classes, {args.quantum_layers} quantum layers")
     print(f"Training Config: LR={args.lr}")
-
     # Initialize model, loss, and optimizer
     model = HybridUltraLight(num_classes=args.classes, n_quantum_layers=args.quantum_layers).to(device)
     criterion = nn.CrossEntropyLoss()
@@ -217,7 +231,6 @@ if __name__ == '__main__':
     
     # Early Stopping
     early_stopping = EarlyStopping(patience=20, min_delta=0.0001)
-
     # Metrics history
     history = {
         'train_loss': [], 'train_accuracy': [], 'train_precision': [], 'train_recall': [], 'train_f1': [],
@@ -226,14 +239,24 @@ if __name__ == '__main__':
     
     # CSV file setup
     csv_file = os.path.join(output_dir, 'training_metrics_ultra.csv')
-    with open(csv_file, mode='w', newline='') as file:
+    csv_exists = os.path.exists(csv_file)
+    with open(csv_file, mode='a' if csv_exists else 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Epoch', 'Train Loss', 'Train Acc', 'Train Prec', 'Train Recall', 'Train F1',
-                         'Valid Loss', 'Valid Acc', 'Valid Prec', 'Valid Recall', 'Valid F1'])
-
+        if not csv_exists:
+            writer.writerow(['Epoch', 'Train Loss', 'Train Acc', 'Train Prec', 'Train Recall', 'Train F1',
+                             'Valid Loss', 'Valid Acc', 'Valid Prec', 'Valid Recall', 'Valid F1'])
+    
+    # Resume if checkpoint provided
+    start_epoch = 0
+    best_loss = float('inf')
+    if args.resume:
+        print(f"Resuming from checkpoint: {args.resume}")
+        start_epoch, history, best_loss = load_checkpoint(args.resume, model, optimizer)
+        early_stopping.best_loss = best_loss  # Sync early stopping
+    
     # Training loop
-    num_epochs = 100
-    for epoch in range(num_epochs):
+    num_epochs = args.num_epochs
+    for epoch in range(start_epoch, num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs}")
         
         # Train
@@ -263,22 +286,35 @@ if __name__ == '__main__':
             writer = csv.writer(file)
             writer.writerow([epoch+1, train_loss, train_acc, train_prec, train_rec, train_f1,
                              val_loss, val_acc, val_prec, val_rec, val_f1])
-            
+        
+        # Check if best
+        is_best = val_loss < best_loss
+        if is_best:
+            best_loss = val_loss
+        
+        # Save checkpoint (last always, best if improved)
+        state = {
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'history': history,
+            'best_loss': best_loss
+        }
+        save_checkpoint(state, is_best, output_dir)
+        
         # Early Stopping check
         early_stopping(val_loss)
         if early_stopping.early_stop:
             print("Early stopping triggered")
             break
-
+    
     # Plotting
     print("Plotting metrics...")
     plot_metrics(history, save_dir=plots_dir)
-
     # Testing after training
     print("Testing model...")
     test_loss, test_acc, test_prec, test_rec, test_f1 = evaluate(dataloaders['test'], model, device, criterion)
     print(f"Test Accuracy: {test_acc:.4f}")
     print(f"Test F1 Score: {test_f1:.4f}")
-
-    # Save the model
+    # Save the final model (last is already saved in checkpoint)
     torch.save(model.state_dict(), os.path.join(output_dir, 'hybrid_ultralight_quantum.pth'))
