@@ -145,9 +145,9 @@ def plot_metrics(history, save_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Hybrid Ultra Lightweight Quantum Model')
-    parser.add_argument('--classes', type=int, default=2, help='Number of output classes (default: 2)')
+    parser.add_argument('--classes', type=int, default=7, help='Number of output classes (default: 2)')
     parser.add_argument('--quantum_layers', type=int, default=7, help='Number of quantum layers (default: 7)')
-    parser.add_argument('--dataset_path', type=str, default='chest_xray', help='Path to dataset (default: chest_xray)')
+    parser.add_argument('--dataset_path', type=str, default='ISIC 2018', help='Path to dataset (default: chest_xray)')
     parser.add_argument('--output_dir', type=str, default='outputs_ultra', help='Directory to save outputs (default: outputs_ultra)')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate (default: 0.0001)')
     
